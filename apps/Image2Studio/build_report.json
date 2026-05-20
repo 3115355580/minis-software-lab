@@ -1,15 +1,15 @@
 {
-  "generated_at": "2026-05-20T11:27:43",
+  "generated_at": "2026-05-20T11:37:11",
   "generator_version": "3.5.0",
   "app_name": "Image2Studio",
   "project_dir": "/var/minis/workspace/apkgen/Image2Studio",
   "apk_path": "/var/minis/attachments/Image2Studio.apk",
   "apk_size_bytes": 29235,
-  "apk_sha256": "22519c6c24d995060c211ad38b3a41f8b3753de8ba9d6d2907f1f932e3e879a4",
+  "apk_sha256": "442b33119587a0e649ac72c6a12d25af35565e792c8bc66e292e2a67f47dc045",
   "manifest": {
     "package": "cc.minis.image2studio",
-    "versionCode": "2",
-    "versionName": "1.0.1",
+    "versionCode": "3",
+    "versionName": "1.0.2",
     "minSdk": "23",
     "targetSdk": "35",
     "label": "Image2Studio",
@@ -41,12 +41,12 @@
     {
       "name": "version_code_present",
       "ok": true,
-      "detail": "2"
+      "detail": "3"
     },
     {
       "name": "version_name_present",
       "ok": true,
-      "detail": "1.0.1"
+      "detail": "1.0.2"
     },
     {
       "name": "launcher_activity",
