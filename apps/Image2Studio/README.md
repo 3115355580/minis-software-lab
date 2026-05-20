@@ -2,6 +2,8 @@
 
 成品级 Android image2 生图客户端，支持 OpenAI 兼容图片接口。
 
+当前版本：`1.0.1` / `versionCode 2`
+
 ## 功能
 
 - 默认中转站：`https://factory.pub`
@@ -13,7 +15,9 @@
 - 支持多图参考，重复表单字段 `image`
 - 支持比例预设和生成数量 1-4
 - 兼容 `url`、`b64_json`、`b64` 图片响应
-- 支持图片展示、保存到系统相册 Pictures/Image2Studio、分享/打开 URL
+- 生成成功后自动持久化保存到 App 私有目录 `files/images`
+- 历史记录显示缩略图，点击可预览
+- 用户点击“保存当前结果到系统相册”后，才复制到系统相册 `Pictures/Image2Studio`
 - 本机保存最近 20 条历史记录
 - 请求日志自动隐藏 API Key
 
