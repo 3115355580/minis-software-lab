@@ -1,25 +1,50 @@
 # Image2Studio
 
-成品级 Android image2 生图客户端，支持 OpenAI 兼容图片接口。
+Image2Studio 是一个 Android 端 image2 AI 生图与图生图工具，支持 OpenAI 兼容图片接口。
 
-当前版本：`2.2.2` / `versionCode 12`
+## 功能
 
-## v2.2.2
+- 文生图：`/v1/images/generations`
+- 图生图 / 图片编辑：`/v1/images/edits`
+- Android Photo Picker 导入参考图
+- 生成结果本地历史
+- 分享、编辑、保存、单条删除历史
+- 图生图独立结果区
+- 图片大图预览
+- 启动自动获取模型并优先选择 `gpt-image-2`
+- 可选错误日志：默认关闭，只记录错误，不记录成功、提示词、API Key 等敏感信息
+- 生成耗时显示
 
-- 当前结果支持直接分享 App 内部已持久化图片，不再要求先保存到系统相册。
-- 新增内部图片 `ContentProvider`，通过 `content://cc.minis.image2studio.share/...` 给系统分享面板临时授权。
-- 保留“保存到相册”作为复制到系统相册的独立操作。
-- 底部导航保持实体不透明 TabBar。
-- 图生图参考图支持缩略图预览和单独删除。
+## 默认接口
 
-## 参数规则
+```text
+Base URL: https://factory.pub
+Model: gpt-image-2
+```
 
-比例：`Auto`、`16:9`、`9:16`、`1:1`、`4:3`、`3:4`
+API Key 在 App 设置页内填写，可选择是否保存到本机私有配置。
 
-清晰度：`Auto`、`4K`
+## 安装
 
-## 权限
+从 Releases 下载 APK 后侧载安装。
 
-- `INTERNET`
+> 当前 APK 使用本地 debug keystore 签名，适合侧载测试；正式发布前请替换正式签名。
 
-无通讯录、短信、定位、相机、相册读写等危险权限。
+## 隐私
+
+- 不内置任何 API Key；
+- 不上传用户数据到除用户配置的图片接口以外的服务；
+- 历史图片保存在 App 私有目录；
+- 可选错误日志默认关闭，启用后只记录错误摘要，并清洗敏感信息。
+
+## 源码结构
+
+```text
+app/src/main/java/cc/minis/image2studio/  原生 Android Java 外壳与 Bridge
+app/src/main/assets/index.html            WebView UI
+app/src/main/res/drawable/ic_launcher.png 应用图标
+```
+
+## 构建说明
+
+本项目由 Minis Android 构建工具链生成和维护。构建产物见 GitHub Releases。
