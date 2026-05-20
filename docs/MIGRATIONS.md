@@ -4,8 +4,8 @@
 
 Image2Studio 已从本实验仓库迁移为独立公开仓库：
 
-- 仓库：https://github.com/3115355580/Image2Studio
-- 首个正式版本：https://github.com/3115355580/Image2Studio/releases/tag/v1.0.1
+- 仓库：https://github.com/BattleAgain/Image2Studio
+- 首个正式版本：https://github.com/BattleAgain/Image2Studio/releases/tag/v1.0.1
 
 说明：
 

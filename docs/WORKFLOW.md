@@ -4,7 +4,7 @@
 
 ## 固定资产
 
-- GitHub 仓库：`https://github.com/3115355580/minis-software-lab`
+- GitHub 仓库：`https://github.com/BattleAgain/minis-software-lab`
 - Claude Code 隔离安装目录：`/var/minis/shared/tools/claude-code`
 - Claude Code 原生命令：`/var/minis/shared/tools/bin/claude`
 - 小任务非交互入口：`/var/minis/shared/tools/bin/claude-run`
