@@ -1,0 +1,41 @@
+# 忽略规则
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.jks
+secrets.*
+credentials.*
+
+# Android / Java build outputs
+build/
+.gradle/
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+
+# Node / web
+node_modules/
+dist/
+.cache/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Minis temp/offload artifacts
+*.tmp
+*.log
