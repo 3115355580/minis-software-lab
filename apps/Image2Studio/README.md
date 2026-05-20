@@ -2,7 +2,13 @@
 
 成品级 Android image2 生图客户端，支持 OpenAI 兼容图片接口。
 
-当前版本：`1.1.0` / `versionCode 4`
+当前版本：`1.1.1` / `versionCode 5`
+
+## v1.1.1 修复
+
+- 修复默认清晰度 `auto` 时仍传 `size=auto` 导致部分中转站直接断连的问题。
+- 现在默认/高清不传 `size` 字段；只有“真4K”且比例可映射明确尺寸时才传 `size`。
+- 失败后当前结果区会显示失败原因，不再停留在“生成中”。
 
 ## v1.1.0 重点
 
@@ -15,9 +21,7 @@
   - 1:1 → `2880x2880`
   - 4:3 → `3200x2400`
   - 3:4 → `2400x3200`
-  - 其他比例 → `auto` 并把比例写入 prompt
-- 文生图 JSON 传 `size` 字段。
-- 图生图 multipart 传 `size` 字段。
+  - 其他比例 → 不传 size，并把比例写入 prompt
 - 历史记录可预览、载入、保存本条到系统相册。
 
 ## 功能
@@ -45,7 +49,3 @@
 
 App 不内置、不上传、不外泄 API Key。用户选择“记住 API Key”时，仅保存到本机 SharedPreferences。
 图生图只上传用户主动选择的图片。
-
-## 源码
-
-主源码：`app/src/main/java/cc/minis/image2studio/MainActivity.java`
