@@ -1,0 +1,187 @@
+package cc.minis.image2studio;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.os.Bundle;
+import android.os.Build;
+import android.provider.Settings;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.ClipData;
+import android.net.Uri;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.util.Base64;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.*;
+import android.text.InputType;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class MainActivity extends Activity {
+    static final int REQ_PICK_IMAGES = 42;
+    static final String DEF_BASE = "https://factory.pub";
+    static final String DEF_MODEL = "gpt-image-2";
+    static final int BG = Color.rgb(13,17,23), CARD = Color.rgb(22,27,34), LINE = Color.rgb(48,54,61);
+    static final int TEXT = Color.rgb(230,237,243), SUB = Color.rgb(139,148,158), ACCENT = Color.rgb(124,58,237), GREEN = Color.rgb(46,160,67), RED = Color.rgb(248,81,73);
+
+    SharedPreferences sp;
+    EditText baseEt, keyEt, modelEt, promptEt, negEt, editPromptEt;
+    Spinner ratioTextSp, ratioEditSp, nTextSp, nEditSp;
+    CheckBox rememberKeyCb;
+    TextView logView, statusView, selectedView, historyView;
+    LinearLayout resultBox, modelBox;
+    ArrayList<Uri> selectedUris = new ArrayList<Uri>();
+    ArrayList<String> selectedNames = new ArrayList<String>();
+    ArrayList<ResultItem> currentResults = new ArrayList<ResultItem>();
+
+    static class ResultItem { String src; boolean isUrl; Bitmap bmp; ResultItem(String s, boolean u, Bitmap b){src=s;isUrl=u;bmp=b;} }
+
+    public void onCreate(Bundle b) {
+        super.onCreate(b);
+        sp = getSharedPreferences("image2studio", MODE_PRIVATE);
+        buildUi();
+        loadPrefs();
+        renderHistory();
+    }
+
+    void buildUi(){
+        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(BG);
+        LinearLayout root = col(); root.setPadding(dp(16),dp(18),dp(16),dp(24));
+        scroll.addView(root, new ScrollView.LayoutParams(-1,-2)); setContentView(scroll);
+
+        TextView title = tv("Image2Studio", 30, TEXT, true); title.setGravity(Gravity.CENTER_HORIZONTAL); root.addView(title);
+        TextView sub = tv("OpenAI 兼容 image2 生图客户端 · 文生图 / 图生图 / 历史 / 下载", 13, SUB, false); sub.setGravity(Gravity.CENTER_HORIZONTAL); root.addView(sub); gap(root,10);
+        statusView = tv("就绪 · API Key 仅保存在本机", 13, GREEN, false); statusView.setGravity(Gravity.CENTER_HORIZONTAL); root.addView(statusView); gap(root,14);
+
+        LinearLayout settings = card("设置"); root.addView(settings);
+        baseEt = input("Base URL", false); settings.addView(label("Base URL")); settings.addView(baseEt);
+        keyEt = input("API Key", true); settings.addView(label("API Key")); settings.addView(keyEt);
+        rememberKeyCb = new CheckBox(this); rememberKeyCb.setText("记住 API Key（仅本机 SharedPreferences）"); rememberKeyCb.setTextColor(SUB); settings.addView(rememberKeyCb);
+        modelEt = input("模型，例如 gpt-image-2", false); settings.addView(label("模型")); settings.addView(modelEt);
+        LinearLayout row = row(); Button modelsBtn = btn("获取模型", ACCENT); Button clearKeyBtn = btn("清除 Key", LINE); row.addView(modelsBtn, weightLp()); row.addView(clearKeyBtn, weightLp()); settings.addView(row);
+        modelBox = col(); settings.addView(modelBox);
+        modelsBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ fetchModels(); }});
+        clearKeyBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ keyEt.setText(""); sp.edit().remove("apiKey").apply(); toast("已清除 Key"); }});
+
+        LinearLayout textCard = card("文生图"); root.addView(textCard);
+        promptEt = multi("输入正向提示词，例如：赛博朋克城市夜景，电影感，超细节"); textCard.addView(label("正向提示词")); textCard.addView(promptEt);
+        negEt = input("反向提示词，可选", false); textCard.addView(label("反向提示词")); textCard.addView(negEt);
+        LinearLayout tr = row(); ratioTextSp = spinner(ratios()); nTextSp = spinner(nums()); tr.addView(ratioTextSp, weightLp()); tr.addView(nTextSp, weightLp()); textCard.addView(tr);
+        Button genBtn = btn("开始文生图", ACCENT); textCard.addView(genBtn); genBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ generate(false); }});
+
+        LinearLayout editCard = card("图生图 / 图片编辑"); root.addView(editCard);
+        Button pickBtn = btn("选择参考图（1-4 张）", LINE); editCard.addView(pickBtn);
+        selectedView = tv("未选择图片", 13, SUB, false); editCard.addView(selectedView);
+        editPromptEt = multi("输入编辑提示词，例如：保持构图，把人物衣服改成红色，增强真实光影"); editCard.addView(label("编辑提示词")); editCard.addView(editPromptEt);
+        LinearLayout er = row(); ratioEditSp = spinner(ratios()); nEditSp = spinner(nums()); er.addView(ratioEditSp, weightLp()); er.addView(nEditSp, weightLp()); editCard.addView(er);
+        LinearLayout er2 = row(); Button editBtn = btn("开始图生图", ACCENT); Button clearImgBtn = btn("清空图片", LINE); er2.addView(editBtn, weightLp()); er2.addView(clearImgBtn, weightLp()); editCard.addView(er2);
+        pickBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pickImages(); }});
+        clearImgBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ selectedUris.clear(); selectedNames.clear(); updateSelected(); }});
+        editBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ generate(true); }});
+
+        LinearLayout resultCard = card("结果"); root.addView(resultCard);
+        resultBox = col(); resultCard.addView(resultBox);
+        LinearLayout rr = row(); Button saveBtn = btn("保存当前结果", GREEN); Button shareBtn = btn("分享首图/链接", LINE); rr.addView(saveBtn, weightLp()); rr.addView(shareBtn, weightLp()); resultCard.addView(rr);
+        saveBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ saveResults(); }});
+        shareBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ shareFirst(); }});
+
+        LinearLayout histCard = card("历史记录"); root.addView(histCard);
+        historyView = tv("", 13, SUB, false); histCard.addView(historyView);
+        Button clearHist = btn("清空历史", LINE); histCard.addView(clearHist); clearHist.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ sp.edit().remove("history").apply(); renderHistory(); }});
+
+        LinearLayout logCard = card("请求日志"); root.addView(logCard);
+        logView = tv("等待操作。日志会隐藏 API Key。", 12, SUB, false); logCard.addView(logView);
+    }
+
+    void loadPrefs(){ baseEt.setText(sp.getString("base", DEF_BASE)); modelEt.setText(sp.getString("model", DEF_MODEL)); keyEt.setText(sp.getString("apiKey", "")); rememberKeyCb.setChecked(sp.getBoolean("remember", false)); }
+    void savePrefs(){ SharedPreferences.Editor e=sp.edit(); e.putString("base", cleanBase()); e.putString("model", modelEt.getText().toString().trim()); e.putBoolean("remember", rememberKeyCb.isChecked()); if(rememberKeyCb.isChecked()) e.putString("apiKey", keyEt.getText().toString()); else e.remove("apiKey"); e.apply(); }
+
+    void fetchModels(){
+        final String base=cleanBase(), key=key(); if(!checkKey(key)) return; savePrefs(); log("GET "+base+"/v1/models\nAuthorization: Bearer ***"); status("获取模型中...", SUB);
+        new Thread(new Runnable(){ public void run(){ try{ HttpURLConnection c=conn(base+"/v1/models", "GET", key, null); String body=readAll(c); int code=c.getResponseCode(); if(code/100!=2) throw new Exception(errorMsg(body)); JSONObject j=new JSONObject(body); JSONArray arr=j.optJSONArray("data"); final ArrayList<String> ids=new ArrayList<String>(); if(arr!=null) for(int i=0;i<arr.length();i++) ids.add(arr.getJSONObject(i).optString("id")); ui(new Runnable(){ public void run(){ showModels(ids); status("模型列表已更新："+ids.size()+" 个", GREEN); }}); }catch(final Exception e){ uiErr("获取模型失败："+e.getMessage()); } }}).start();
+    }
+
+    void showModels(ArrayList<String> ids){ modelBox.removeAllViews(); if(ids.size()==0){ modelBox.addView(tv("未解析到模型。",12,SUB,false)); return; } for(final String id: ids){ TextView t=tv("模型："+id,13,TEXT,false); t.setPadding(dp(8),dp(8),dp(8),dp(8)); t.setBackgroundColor(BG); t.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ modelEt.setText(id); toast("已选择 "+id); }}); modelBox.addView(t); } }
+
+    void generate(final boolean edit){
+        final String base=cleanBase(), key=key(), model=modelEt.getText().toString().trim(); if(!checkKey(key)) return; if(model.length()==0){toast("请填写模型");return;}
+        final String prompt=(edit?editPromptEt:promptEt).getText().toString().trim(); if(!edit && prompt.length()==0){toast("请输入提示词");return;} if(edit && selectedUris.size()==0){toast("请先选择图片");return;}
+        savePrefs(); resultBox.removeAllViews(); currentResults.clear(); addResultText("生成中，请稍候..."); status(edit?"图生图请求中...":"文生图请求中...", SUB);
+        new Thread(new Runnable(){ public void run(){ long start=System.currentTimeMillis(); try{ String ratio = edit ? ratioEditSp.getSelectedItem().toString() : ratioTextSp.getSelectedItem().toString(); int n = Integer.parseInt((edit?nEditSp:nTextSp).getSelectedItem().toString()); String finalPrompt = withRatio(prompt, ratio); String body; if(edit){ body = postEdit(base,key,model,finalPrompt,n); } else { body = postGenerate(base,key,model,finalPrompt,negEt.getText().toString().trim(),n); } final ArrayList<ResultItem> items = parseResults(body); final long cost=System.currentTimeMillis()-start; addHistory(edit?"图生图":"文生图", finalPrompt, items); ui(new Runnable(){ public void run(){ renderResults(items); status("完成："+items.size()+" 张，耗时 "+cost/1000.0+"s", GREEN); renderHistory(); }}); }catch(final Exception e){ uiErr("生成失败："+e.getMessage()); } }}).start();
+    }
+
+    String postGenerate(String base,String key,String model,String prompt,String neg,int n) throws Exception{
+        JSONObject j=new JSONObject(); j.put("model",model); j.put("prompt",prompt); j.put("n",n); if(neg.length()>0) j.put("negative_prompt",neg);
+        log("POST "+base+"/v1/images/generations\nAuthorization: Bearer ***\n"+j.toString());
+        HttpURLConnection c=conn(base+"/v1/images/generations","POST",key,"application/json"); byte[] data=j.toString().getBytes("UTF-8"); c.getOutputStream().write(data); String body=readAll(c); if(c.getResponseCode()/100!=2) throw new Exception(errorMsg(body)); return body;
+    }
+
+    String postEdit(String base,String key,String model,String prompt,int n) throws Exception{
+        String boundary="----Image2Studio"+System.currentTimeMillis(); log("POST "+base+"/v1/images/edits multipart\nAuthorization: Bearer ***\nimages="+selectedUris.size()+", n="+n);
+        HttpURLConnection c=conn(base+"/v1/images/edits","POST",key,"multipart/form-data; boundary="+boundary); OutputStream out=c.getOutputStream();
+        part(out,boundary,"model",model); part(out,boundary,"prompt",prompt); part(out,boundary,"n",String.valueOf(n));
+        for(int i=0;i<selectedUris.size();i++) filePart(out,boundary,"image",selectedNames.get(i),selectedUris.get(i));
+        out.write(("--"+boundary+"--\r\n").getBytes("UTF-8")); out.flush(); String body=readAll(c); if(c.getResponseCode()/100!=2) throw new Exception(errorMsg(body)); return body;
+    }
+
+    HttpURLConnection conn(String url,String method,String key,String type) throws Exception{ URL u=new URL(url); HttpURLConnection c=(HttpURLConnection)u.openConnection(); c.setRequestMethod(method); c.setConnectTimeout(20000); c.setReadTimeout(180000); c.setRequestProperty("Authorization","Bearer "+key); c.setRequestProperty("Accept","application/json"); if(type!=null){ c.setDoOutput(true); c.setRequestProperty("Content-Type",type); } return c; }
+    String readAll(HttpURLConnection c) throws Exception{ InputStream is; try{is=c.getInputStream();}catch(Exception e){is=c.getErrorStream();} if(is==null) return ""; BufferedReader br=new BufferedReader(new InputStreamReader(is,"UTF-8")); StringBuilder sb=new StringBuilder(); String line; while((line=br.readLine())!=null) sb.append(line).append('\n'); return sb.toString(); }
+    void part(OutputStream out,String b,String name,String val) throws Exception{ out.write(("--"+b+"\r\nContent-Disposition: form-data; name=\""+name+"\"\r\n\r\n"+val+"\r\n").getBytes("UTF-8")); }
+    void filePart(OutputStream out,String b,String name,String fname,Uri uri) throws Exception{ out.write(("--"+b+"\r\nContent-Disposition: form-data; name=\""+name+"\"; filename=\""+fname.replace("\"","_")+"\"\r\nContent-Type: image/png\r\n\r\n").getBytes("UTF-8")); InputStream in=getContentResolver().openInputStream(uri); byte[] buf=new byte[8192]; int len; while((len=in.read(buf))>0) out.write(buf,0,len); in.close(); out.write("\r\n".getBytes("UTF-8")); }
+
+    ArrayList<ResultItem> parseResults(String body) throws Exception{ ArrayList<ResultItem> list=new ArrayList<ResultItem>(); JSONObject j=new JSONObject(body); JSONArray arr=j.optJSONArray("data"); if(arr==null) return list; for(int i=0;i<arr.length();i++){ JSONObject it=arr.getJSONObject(i); String url=it.optString("url","").trim(); String b64=it.optString("b64_json","").trim(); if(b64.length()==0) b64=it.optString("b64","").trim(); if(url.length()>0){ list.add(new ResultItem(url,true,downloadBitmap(url))); } else if(b64.length()>0){ String raw=b64.startsWith("data:")?b64.substring(b64.indexOf(',')+1):b64; byte[] bytes=Base64.decode(raw,Base64.DEFAULT); Bitmap bm=BitmapFactory.decodeByteArray(bytes,0,bytes.length); list.add(new ResultItem(b64.startsWith("data:")?b64:"data:image/png;base64,"+b64,false,bm)); } } return list; }
+    Bitmap downloadBitmap(String s) throws Exception{ HttpURLConnection c=(HttpURLConnection)new URL(s).openConnection(); c.setConnectTimeout(15000); c.setReadTimeout(60000); return BitmapFactory.decodeStream(c.getInputStream()); }
+
+    void renderResults(ArrayList<ResultItem> items){ resultBox.removeAllViews(); currentResults.clear(); currentResults.addAll(items); if(items.size()==0){ addResultText("接口成功，但没有图片数据。支持 url / b64_json / b64。 "); return; } for(int i=0;i<items.size();i++){ final ResultItem it=items.get(i); TextView cap=tv("结果 #"+(i+1)+(it.isUrl?" · URL":" · Base64"),13,SUB,false); resultBox.addView(cap); if(it.bmp!=null){ ImageView iv=new ImageView(this); iv.setImageBitmap(it.bmp); iv.setAdjustViewBounds(true); iv.setBackgroundColor(BG); iv.setPadding(dp(4),dp(4),dp(4),dp(4)); resultBox.addView(iv,new LinearLayout.LayoutParams(-1,-2)); iv.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ preview(it); }}); } else if(it.isUrl){ TextView link=tv(it.src,12,ACCENT,false); resultBox.addView(link); link.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(it.src))); }}); } gap(resultBox,8); } }
+    void addResultText(String s){ resultBox.addView(tv(s,13,SUB,false)); }
+    void preview(final ResultItem it){ AlertDialog.Builder b=new AlertDialog.Builder(this); if(it.bmp!=null){ ImageView iv=new ImageView(this); iv.setImageBitmap(it.bmp); iv.setAdjustViewBounds(true); b.setView(iv); } else b.setMessage(it.src); b.setPositiveButton("关闭",null); if(it.isUrl) b.setNegativeButton("打开链接", new android.content.DialogInterface.OnClickListener(){ public void onClick(android.content.DialogInterface d,int w){ startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(it.src))); }}); b.show(); }
+
+    void saveResults(){ if(currentResults.size()==0){toast("没有结果可保存");return;} int ok=0; for(int i=0;i<currentResults.size();i++){ try{ ResultItem it=currentResults.get(i); if(it.bmp==null) continue; File dir=new File(getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES),"Image2Studio"); dir.mkdirs(); File f=new File(dir,"image2_"+System.currentTimeMillis()+"_"+i+".png"); FileOutputStream fos=new FileOutputStream(f); it.bmp.compress(Bitmap.CompressFormat.PNG,100,fos); fos.close(); ok++; }catch(Exception e){} } toast("已保存 "+ok+" 张到 App 图片目录"); }
+    void shareFirst(){ if(currentResults.size()==0){toast("没有可分享结果");return;} ResultItem it=currentResults.get(0); Intent send=new Intent(Intent.ACTION_SEND); if(it.isUrl){ send.setType("text/plain"); send.putExtra(Intent.EXTRA_TEXT,it.src); } else { send.setType("text/plain"); send.putExtra(Intent.EXTRA_TEXT,"Image2Studio 生成图片已保存/可在结果区预览。建议先点保存当前结果。"); } startActivity(Intent.createChooser(send,"分享结果")); }
+
+    void addHistory(String mode,String prompt,ArrayList<ResultItem> items){ try{ JSONArray arr=new JSONArray(sp.getString("history","[]")); JSONObject o=new JSONObject(); o.put("mode",mode); o.put("prompt",prompt); o.put("time",new SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.CHINA).format(new Date())); o.put("count",items.size()); if(items.size()>0) o.put("first",items.get(0).isUrl?items.get(0).src:"base64 image"); JSONArray n=new JSONArray(); n.put(o); for(int i=0;i<arr.length() && i<19;i++) n.put(arr.getJSONObject(i)); sp.edit().putString("history",n.toString()).apply(); }catch(Exception e){} }
+    void renderHistory(){ try{ JSONArray arr=new JSONArray(sp.getString("history","[]")); if(arr.length()==0){ historyView.setText("暂无历史。生成成功后会保留最近 20 条。 "); return; } StringBuilder sb=new StringBuilder(); for(int i=0;i<arr.length();i++){ JSONObject o=arr.getJSONObject(i); sb.append(i+1).append(". ").append(o.optString("time")).append(" · ").append(o.optString("mode")).append(" · ").append(o.optInt("count")).append(" 张\n"); String p=o.optString("prompt"); if(p.length()>80) p=p.substring(0,80)+"..."; sb.append(p).append("\n\n"); } historyView.setText(sb.toString()); }catch(Exception e){ historyView.setText("历史读取失败："+e.getMessage()); } }
+
+    void pickImages(){ Intent it=new Intent(Intent.ACTION_OPEN_DOCUMENT); it.setType("image/*"); it.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true); it.addCategory(Intent.CATEGORY_OPENABLE); startActivityForResult(it,REQ_PICK_IMAGES); }
+    protected void onActivityResult(int req,int res,Intent data){ super.onActivityResult(req,res,data); if(req==REQ_PICK_IMAGES && res==RESULT_OK && data!=null){ selectedUris.clear(); selectedNames.clear(); if(data.getClipData()!=null){ ClipData cd=data.getClipData(); for(int i=0;i<cd.getItemCount() && i<4;i++) addUri(cd.getItemAt(i).getUri()); } else if(data.getData()!=null) addUri(data.getData()); updateSelected(); } }
+    void addUri(Uri u){ try{ getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION); }catch(Exception e){} selectedUris.add(u); selectedNames.add("image_"+selectedUris.size()+".png"); }
+    void updateSelected(){ selectedView.setText(selectedUris.size()==0?"未选择图片":"已选择 "+selectedUris.size()+" 张："+selectedNames.toString()); }
+
+    String withRatio(String p,String r){ if(r==null || r.startsWith("auto")) return p; String extra=""; if(r.startsWith("1:1")) extra="square composition, 1:1 aspect ratio, 1080x1080"; else if(r.startsWith("4:3")) extra="natural photo composition, 4:3 aspect ratio, 1600x1200"; else if(r.startsWith("3:2")) extra="photography composition, 3:2 aspect ratio, 1800x1200"; else if(r.startsWith("16:9")) extra="wide composition, 16:9 aspect ratio, 1920x1080"; else if(r.startsWith("21:9")) extra="ultra wide cinematic composition, 21:9 aspect ratio, 2520x1080"; else if(r.startsWith("9:16")) extra="vertical composition, 9:16 aspect ratio, 1080x1920"; else if(r.startsWith("2:3")) extra="portrait composition, 2:3 aspect ratio, 1200x1800"; else if(r.startsWith("3:4")) extra="editorial portrait composition, 3:4 aspect ratio, 1080x1440"; else if(r.startsWith("4:5")) extra="social media portrait composition, 4:5 aspect ratio, 1080x1350"; return p + (p.length()>0?", ":"") + extra; }
+    String[] ratios(){ return new String[]{"auto 自动","1:1 方图","4:3 横图","3:2 摄影","16:9 宽屏","21:9 电影宽屏","9:16 竖屏","2:3 人像","3:4 竖图","4:5 社媒"}; }
+    String[] nums(){ return new String[]{"1","2","3","4"}; }
+    String cleanBase(){ String s=baseEt.getText().toString().trim(); if(s.length()==0) s=DEF_BASE; while(s.endsWith("/")) s=s.substring(0,s.length()-1); return s; }
+    String key(){ return keyEt.getText().toString().trim(); }
+    boolean checkKey(String k){ if(k.length()==0){ status("缺少 API Key", RED); toast("请填写 API Key"); return false; } return true; }
+    String errorMsg(String body){ try{ JSONObject j=new JSONObject(body); JSONObject e=j.optJSONObject("error"); if(e!=null && e.optString("message").length()>0) return e.optString("message"); }catch(Exception ex){} return body.length()>500?body.substring(0,500):body; }
+
+    LinearLayout col(){ LinearLayout l=new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); return l; }
+    LinearLayout row(){ LinearLayout l=new LinearLayout(this); l.setOrientation(LinearLayout.HORIZONTAL); l.setGravity(Gravity.CENTER); return l; }
+    LinearLayout card(String name){ LinearLayout c=col(); c.setPadding(dp(14),dp(12),dp(14),dp(12)); c.setBackgroundColor(CARD); LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2); lp.setMargins(0,dp(8),0,dp(8)); c.setLayoutParams(lp); TextView h=tv(name,18,TEXT,true); c.addView(h); gap(c,6); return c; }
+    TextView label(String s){ return tv(s,12,SUB,false); }
+    TextView tv(String s,int size,int color,boolean bold){ TextView t=new TextView(this); t.setText(s); t.setTextSize(size); t.setTextColor(color); if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD); t.setLineSpacing(0,1.15f); return t; }
+    EditText input(String hint, boolean pwd){ EditText e=new EditText(this); e.setHint(hint); e.setHintTextColor(SUB); e.setTextColor(TEXT); e.setSingleLine(true); e.setPadding(dp(10),0,dp(10),0); e.setBackgroundColor(BG); if(pwd) e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD); return e; }
+    EditText multi(String hint){ EditText e=input(hint,false); e.setSingleLine(false); e.setMinLines(3); e.setGravity(Gravity.TOP); return e; }
+    Button btn(String s,int color){ Button b=new Button(this); b.setText(s); b.setTextColor(Color.WHITE); b.setAllCaps(false); b.setBackgroundColor(color); return b; }
+    Spinner spinner(String[] xs){ Spinner s=new Spinner(this); ArrayAdapter<String> a=new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, xs); a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item); s.setAdapter(a); return s; }
+    LinearLayout.LayoutParams weightLp(){ LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1); lp.setMargins(dp(4),dp(4),dp(4),dp(4)); return lp; }
+    void gap(LinearLayout l,int h){ Space s=new Space(this); l.addView(s,new LinearLayout.LayoutParams(1,dp(h))); }
+    int dp(int v){ return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
+    void toast(String s){ Toast.makeText(this,s,Toast.LENGTH_SHORT).show(); }
+    void log(final String s){ ui(new Runnable(){ public void run(){ logView.setText(s); }}); }
+    void status(String s,int color){ statusView.setText(s); statusView.setTextColor(color); }
+    void ui(Runnable r){ runOnUiThread(r); }
+    void uiErr(final String s){ ui(new Runnable(){ public void run(){ status(s,RED); logView.setText(s); toast(s); }}); }
+}
