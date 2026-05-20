@@ -4,7 +4,8 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Build;
-import android.provider.Settings;
+import android.provider.MediaStore;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.ClipData;
@@ -148,7 +149,7 @@ public class MainActivity extends Activity {
     void addResultText(String s){ resultBox.addView(tv(s,13,SUB,false)); }
     void preview(final ResultItem it){ AlertDialog.Builder b=new AlertDialog.Builder(this); if(it.bmp!=null){ ImageView iv=new ImageView(this); iv.setImageBitmap(it.bmp); iv.setAdjustViewBounds(true); b.setView(iv); } else b.setMessage(it.src); b.setPositiveButton("关闭",null); if(it.isUrl) b.setNegativeButton("打开链接", new android.content.DialogInterface.OnClickListener(){ public void onClick(android.content.DialogInterface d,int w){ startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(it.src))); }}); b.show(); }
 
-    void saveResults(){ if(currentResults.size()==0){toast("没有结果可保存");return;} int ok=0; for(int i=0;i<currentResults.size();i++){ try{ ResultItem it=currentResults.get(i); if(it.bmp==null) continue; File dir=new File(getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES),"Image2Studio"); dir.mkdirs(); File f=new File(dir,"image2_"+System.currentTimeMillis()+"_"+i+".png"); FileOutputStream fos=new FileOutputStream(f); it.bmp.compress(Bitmap.CompressFormat.PNG,100,fos); fos.close(); ok++; }catch(Exception e){} } toast("已保存 "+ok+" 张到 App 图片目录"); }
+    void saveResults(){ if(currentResults.size()==0){toast("没有结果可保存");return;} int ok=0; for(int i=0;i<currentResults.size();i++){ try{ ResultItem it=currentResults.get(i); if(it.bmp==null) continue; ContentValues cv=new ContentValues(); cv.put(MediaStore.Images.Media.DISPLAY_NAME,"image2_"+System.currentTimeMillis()+"_"+i+".png"); cv.put(MediaStore.Images.Media.MIME_TYPE,"image/png"); if(Build.VERSION.SDK_INT>=29) cv.put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/Image2Studio"); Uri uri=getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,cv); if(uri==null) continue; OutputStream os=getContentResolver().openOutputStream(uri); it.bmp.compress(Bitmap.CompressFormat.PNG,100,os); os.flush(); os.close(); ok++; }catch(Exception e){ log("保存失败："+e.getMessage()); } } toast("已保存 "+ok+" 张到系统相册 Pictures/Image2Studio"); }
     void shareFirst(){ if(currentResults.size()==0){toast("没有可分享结果");return;} ResultItem it=currentResults.get(0); Intent send=new Intent(Intent.ACTION_SEND); if(it.isUrl){ send.setType("text/plain"); send.putExtra(Intent.EXTRA_TEXT,it.src); } else { send.setType("text/plain"); send.putExtra(Intent.EXTRA_TEXT,"Image2Studio 生成图片已保存/可在结果区预览。建议先点保存当前结果。"); } startActivity(Intent.createChooser(send,"分享结果")); }
 
     void addHistory(String mode,String prompt,ArrayList<ResultItem> items){ try{ JSONArray arr=new JSONArray(sp.getString("history","[]")); JSONObject o=new JSONObject(); o.put("mode",mode); o.put("prompt",prompt); o.put("time",new SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.CHINA).format(new Date())); o.put("count",items.size()); if(items.size()>0) o.put("first",items.get(0).isUrl?items.get(0).src:"base64 image"); JSONArray n=new JSONArray(); n.put(o); for(int i=0;i<arr.length() && i<19;i++) n.put(arr.getJSONObject(i)); sp.edit().putString("history",n.toString()).apply(); }catch(Exception e){} }

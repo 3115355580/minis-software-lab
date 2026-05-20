@@ -13,7 +13,7 @@
 - 支持多图参考，重复表单字段 `image`
 - 支持比例预设和生成数量 1-4
 - 兼容 `url`、`b64_json`、`b64` 图片响应
-- 支持图片展示、保存到 Pictures/Image2Studio、分享/打开 URL
+- 支持图片展示、保存到系统相册 Pictures/Image2Studio、分享/打开 URL
 - 本机保存最近 20 条历史记录
 - 请求日志自动隐藏 API Key
 
