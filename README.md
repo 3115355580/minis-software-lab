@@ -13,6 +13,10 @@ Android 上的 Minis + Claude Code 软件实验室。
 
 见：[`docs/WORKFLOW.md`](docs/WORKFLOW.md)
 
+## 项目迁移
+
+见：[`docs/MIGRATIONS.md`](docs/MIGRATIONS.md)
+
 ## 推荐目录
 
 ```text
