@@ -23,7 +23,7 @@ public class ImageShareProvider extends ContentProvider {
         String name = uri.getLastPathSegment();
         if (name == null || name.contains("/") || name.contains("..")) throw new FileNotFoundException("bad name");
         File f = new File(getContext().getFilesDir(), "images/" + name);
-        if (!f.exists()) throw new FileNotFoundException(name);
-        return ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY);
+        int flags = mode != null && mode.indexOf('w') >= 0 ? (ParcelFileDescriptor.MODE_READ_WRITE | ParcelFileDescriptor.MODE_CREATE | ParcelFileDescriptor.MODE_TRUNCATE) : ParcelFileDescriptor.MODE_READ_ONLY;
+        return ParcelFileDescriptor.open(f, flags);
     }
 }
